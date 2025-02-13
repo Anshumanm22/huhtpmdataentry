@@ -19,7 +19,8 @@ st.set_page_config(
 # Google Sheets setup
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive'
+    'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/drive.file'
 ]
 
 @st.cache_resource
