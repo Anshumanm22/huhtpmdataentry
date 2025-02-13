@@ -61,7 +61,7 @@ def get_or_create_sheet(sheet_name):
         # Set up headers based on sheet type
         if sheet_name == "Observations":
             headers = ["Timestamp", "PM Name", "School Name", "Visit Date", "Visit Type",
-                      "Teacher Details", "Observations", "Infrastructure Data", "Community Data"]
+                      "Teacher Details", "Observations", "Infrastructure Data", "Community Data", "Media"]
         elif sheet_name == "Schools":
             headers = ["School Name", "Program Manager", "Added Date"]
         elif sheet_name == "Teachers":
@@ -158,23 +158,33 @@ def upload_to_drive(file, filename, mime_type, folder_id=None):
             resumable=True
         )
 
+        # Create a progress bar in Streamlit
+        progress_bar = st.progress(0)
+
         request = service.files().create(media=media, body=file_metadata)
         response = None
         while response is None:
             status, response = request.next_chunk()
             if status:
-                print(f"Uploaded {int(status.progress() * 100)}%.")
+                progress = status.progress()
+                progress_bar.progress(progress)  # Update the progress bar
 
-        return response.get('id') #return file ID
+        progress_bar.empty()  # Remove the progress bar when done
+
+        if response:
+            print(f"Upload complete: {response}")
+            return response.get('id') #return file ID
+        else:
+            st.error("File upload failed.")
+            return None
 
     except Exception as e:
-        st.error(f"An error occurred during Google Drive upload: {e}")
+        st.error(f"An error occurred: {e}")
         return None
 
-def handle_media_upload(teacher_name, school_name, visit_date):
+def handle_media_upload(teacher_name, school_name, visit_date, unique_key):
     """Handle media upload for a specific observation"""
-    # Use a unique identifier based on the teacher and current time
-    unique_key = f"{teacher_name}_{school_name}_{visit_date}_{datetime.now().timestamp()}"
+
 
     uploaded_files = []
 
@@ -182,8 +192,7 @@ def handle_media_upload(teacher_name, school_name, visit_date):
     col1, col2 = st.columns(2)
 
     # Set Google Drive Folder ID
-    folder_id = st.secrets.get("GOOGLE_DRIVE_FOLDER_ID") #Use st.secrets to get Google Drive folder id
-
+    folder_id = st.secrets.get("GOOGLE_DRIVE_FOLDER_ID")
 
     with col1:
         # Allow photo upload
@@ -202,7 +211,7 @@ def handle_media_upload(teacher_name, school_name, visit_date):
                         uploaded_files.append({
                             'type': 'photo',
                             'name': photo.name,
-                            'file_id': file_id #Store the file ID instead of the data
+                            'file_id': file_id  # Store the file ID instead of the data
                         })
                     else:
                         st.error(f"Failed to upload {photo.name} to Google Drive.")
@@ -221,12 +230,12 @@ def handle_media_upload(teacher_name, school_name, visit_date):
         if videos:
             for video in videos:
                 try:
-                    file_id = upload_to_drive(video.read(), video.name, video.type, folder_id) #upload to Google Drive
+                    file_id = upload_to_drive(video.read(), video.name, video.type, folder_id)  # upload to Google Drive
                     if file_id:
                         uploaded_files.append({
                             'type': 'video',
                             'name': video.name,
-                            'file_id': file_id #Store the file ID instead of the data
+                            'file_id': file_id  # Store the file ID instead of the data
                         })
                     else:
                         st.error(f"Failed to upload {video.name} to Google Drive.")
@@ -234,6 +243,10 @@ def handle_media_upload(teacher_name, school_name, visit_date):
                     st.error(f"Error processing video {video.name}: {e}")
 
     return uploaded_files
+
+def get_download_link(file_id):
+    """Generates a direct download link for a Google Drive file."""
+    return f"https://drive.google.com/uc?export=download&id={file_id}"
 
 def save_observation(data):
     """Save observation data to Google Sheets"""
@@ -251,8 +264,9 @@ def save_observation(data):
             data["basic_details"]["visit_type"],
             json.dumps(data["teacher_details"]),
             json.dumps(data.get("observations", {})),
-            json.dumps(data.get("infrastructure", {})) if data["basic_details"]["visit_type"] == "Monthly" else "{}",
-            json.dumps(data.get("community", {})) if data["basic_details"]["visit_type"] == "Monthly" else "{}"
+            json.dumps(data.get("infrastructure", {}) if data["basic_details"]["visit_type"] == "Monthly" else {}),
+            json.dumps(data.get("community", {}) if data["basic_details"]["visit_type"] == "Monthly" else {}),
+            json.dumps(data.get("media", {}))  # Save the media files data
         ]
         sheet.append_row(row)
         return True
@@ -407,9 +421,13 @@ def classroom_observation_section():
 
     tabs = st.tabs(all_teachers)
     observations = {}
+    media_data = {}
 
     for i, teacher in enumerate(all_teachers):
         with tabs[i]:
+            # Generate a unique key for each teacher
+            unique_key = f"{teacher}_{datetime.now().timestamp()}"
+
             col1, col2 = st.columns(2)
             with col1:
                 st.write("Teacher Actions")
@@ -450,33 +468,28 @@ def classroom_observation_section():
                         key=f"{teacher}_involvement"
                     )
                 }
+
             observations[teacher] = {
                 "teacher_metrics": teacher_metrics,
                 "student_metrics": student_metrics
             }
 
-            # Add this after the student_metrics section for each teacher
-            observations[teacher] = {
-                "teacher_metrics": teacher_metrics,
-                "student_metrics": student_metrics
-            }
-
-            # Add this after the student_metrics section for each teacher
             st.write("---")
             st.subheader("Media Upload")
             media_files = handle_media_upload(
                 teacher,
                 st.session_state.basic_details["school_name"],
-                st.session_state.basic_details["visit_date"]
+                st.session_state.basic_details["visit_date"],
+                unique_key # Pass the unique key
             )
+
             if media_files:
                 st.write("Uploaded Files:")
                 for file in media_files:
-                    st.write(f"- {file['name']}")
+                    download_link = get_download_link(file['file_id'])
+                    st.markdown(f"- [{file['name']}]({download_link})")
 
-            # Safely add media files
-            observations[teacher]["media_files"] = media_files
-
+            media_data[teacher] = media_files
 
     col1, col2 = st.columns(2)
     with col1:
@@ -486,6 +499,7 @@ def classroom_observation_section():
         next_text = "Next →" if st.session_state.visit_type == "Monthly" else "Submit"
         if st.button(next_text, type="primary"):
             st.session_state.observations = observations
+            st.session_state.media = media_data #storing this as the data to upload
             if st.session_state.visit_type == "Monthly":
                 st.session_state.page = 4
             else:
@@ -594,6 +608,8 @@ def submit_form():
         "basic_details": st.session_state.basic_details,
         "teacher_details": st.session_state.teacher_details,
         "observations": st.session_state.observations if "observations" in st.session_state else {},
+        "media": st.session_state.media if "media" in st.session_state else {}
+
     }
 
     if st.session_state.visit_type == "Monthly":
@@ -605,7 +621,7 @@ def submit_form():
         # Clear the session state after successful submission
         for key in st.session_state.keys():
             del st.session_state[key]
-        st.session_state.page = 1 # Reset to the first page
+        st.session_state.page = 1  # Reset to the first page
         st.rerun()
     else:
         st.error("Failed to save observation")
