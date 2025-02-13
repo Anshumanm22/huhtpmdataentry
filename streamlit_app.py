@@ -31,32 +31,51 @@ def connect_to_gsheets():
             st.secrets["gcp_service_account"],
             scopes=SCOPES
         )
-        return gspread.authorize(credentials)
+        gc = gspread.authorize(credentials)  # Correct way to authorize
+        print("Successfully connected to Google Sheets.")  # Add this line
+        return gc
     except Exception as e:
         st.error(f"Failed to connect to Google Sheets: {str(e)}")
+        print(f"Error connecting to Google Sheets: {str(e)}")  # And this line
         return None
 
 def get_or_create_sheet(sheet_name):
     """Get or create a specific worksheet"""
     client = connect_to_gsheets()
     if not client:
+        st.error("Google Sheets client not initialized.")
         return None
 
     try:
         # Try to open existing sheet
-        sheet = client.open("School_Observations").worksheet(sheet_name)
+        spreadsheet = client.open("School_Observations")
+        sheet = spreadsheet.worksheet(sheet_name)
+        print(f"Successfully opened sheet: {sheet_name}")
         return sheet
-    except Exception:
+    except Exception as e:
+        print(f"Sheet '{sheet_name}' not found. Attempting to create...")
         try:
             # If sheet doesn't exist, create it
-            workbook = client.open("School_Observations")
-        except Exception:
-            # If workbook doesn't exist, create it
-            workbook = client.create("School_Observations")
-            # Share with anyone who has the link
-            workbook.share(None, perm_type='anyone', role='writer')
+            spreadsheet = client.open("School_Observations")
+        except Exception as e:
+            print(f"Workbook 'School_Observations' not found. Attempting to create...")
+            try:
+                spreadsheet = client.create("School_Observations")
+                # Share with anyone who has the link
+                spreadsheet.share(None, perm_type='anyone', role='writer')
+                print("Workbook 'School_Observations' created and shared.")
+            except Exception as e:
+                st.error(f"Failed to create workbook: {str(e)}")
+                print(f"Failed to create workbook: {str(e)}")
+                return None
 
-        sheet = workbook.add_worksheet(sheet_name, 1000, 20)
+        try:
+            sheet = spreadsheet.add_worksheet(sheet_name, 1000, 20)
+            print(f"Sheet '{sheet_name}' created.")
+        except Exception as e:
+            st.error(f"Failed to create sheet: {str(e)}")
+            print(f"Failed to create sheet: {str(e)}")
+            return None
 
         # Set up headers based on sheet type
         if sheet_name == "Observations":
@@ -67,7 +86,14 @@ def get_or_create_sheet(sheet_name):
         elif sheet_name == "Teachers":
             headers = ["School Name", "Teacher Name", "Is Trained", "Added Date"]
 
-        sheet.insert_row(headers, 1)
+        try:
+            sheet.insert_row(headers, 1)
+            print("Headers inserted.")
+        except Exception as e:
+            st.error(f"Failed to insert headers: {str(e)}")
+            print(f"Failed to insert headers: {str(e)}")
+            return None
+
         return sheet
 
     return None
@@ -268,10 +294,17 @@ def save_observation(data):
             json.dumps(data.get("community", {}) if data["basic_details"]["visit_type"] == "Monthly" else {}),
             json.dumps(data.get("media", {}))  # Save the media files data
         ]
+        print(f"Row being saved: {row}")  # Add this line for debugging
+
         sheet.append_row(row)
+        print("Row appended successfully.")  # Add this line
         return True
     except Exception as e:
         st.error(f"Error saving observation: {str(e)}")
+        print(f"Error saving observation: {str(e)}")  # And this line
+        print(f"Exception type: {type(e).__name__}")  # Print exception type
+        print(f"Exception args: {e.args}")  # Print exception arguments
+
         return False
 
 def add_new_teacher(school_name, teacher_name, is_trained):
@@ -615,7 +648,7 @@ def submit_form():
     if st.session_state.visit_type == "Monthly":
         data["infrastructure"] = st.session_state.infrastructure if "infrastructure" in st.session_state else {}
         data["community"] = st.session_state.community if "community" in st.session_state else {}
-
+    print(f"Data being passed to save_observation: {data}") # Add this line
     if save_observation(data):
         st.success("Observation saved successfully")
         # Clear the session state after successful submission
