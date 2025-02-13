@@ -129,8 +129,8 @@ def get_school_teachers(school_name):
 
 def handle_media_upload(teacher_name, school_name, visit_date):
     """Handle media upload for a specific observation"""
-    # Use a unique identifier based on the current session and teacher
-    unique_key = f"{teacher_name}_{school_name}_{visit_date}_{hash(st.session_state._script_run_ctx)}"
+    # Use a unique identifier based on the teacher and current time
+    unique_key = f"{teacher_name}_{school_name}_{visit_date}_{datetime.now().timestamp()}"
     
     uploaded_files = []
     
