@@ -358,7 +358,7 @@ if media_files:
 observations[teacher].update({
     "media_files": media_files
 })
-            observations[teacher] = {
+observations[teacher] = {
                 "teacher_metrics": teacher_metrics,
                 "student_metrics": student_metrics
             }
