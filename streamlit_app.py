@@ -406,10 +406,11 @@ def classroom_observation_section():
 
     st.write("---")
     st.subheader("Media Upload")
-    media_files = handle_media_upload(
-        teacher,
-        st.session_state.basic_details["school_name"],
-        st.session_state.basic_details["visit_date"]
+      media_files = handle_media_upload(
+    teacher,
+    st.session_state.basic_details["school_name"],
+    st.session_state.basic_details["visit_date"],
+    i  # Pass the index to ensure unique keys
     )
     if media_files:
         st.write("Uploaded Files:")
