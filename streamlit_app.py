@@ -129,23 +129,39 @@ def get_school_teachers(school_name):
 @st.cache_resource
 def create_drive_service():
     """Create a Google Drive service"""
-    st.write(list(st.secrets.keys()))
     try:
-        # Print out the keys to verify
-        print(list(st.secrets["gcp_service_account"].keys()))
+        # Verify the secret exists and has content
+        if 'gcp_service_account' not in st.secrets:
+            st.error("No 'gcp_service_account' secret found")
+            return None
         
+        # Try to parse the service account info
+        service_account_info = st.secrets["gcp_service_account"]
+        st.write("Service Account Info Type:", type(service_account_info))
+        
+        # Attempt to create credentials
         credentials = Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
+            service_account_info,
             scopes=SCOPES
         )
         
-        print("Credentials created successfully")
-        
+        # Create and return Drive service
         drive_service = build('drive', 'v3', credentials=credentials)
-        
-        print("Drive service created successfully")
-        
         return drive_service
+    
+    except Exception as e:
+        # Provide detailed error information
+        st.error(f"Failed to connect to Google Drive: {str(e)}")
+        st.error(f"Error Type: {type(e)}")
+        
+        # Additional context for common issues
+        if isinstance(e, ValueError):
+            st.error("Possible issues:")
+            st.error("1. Service account JSON might be malformed")
+            st.error("2. Missing required fields in service account")
+        
+        return None
+        
     except Exception as e:
         st.error(f"Failed to connect to Google Drive: {str(e)}")
         st.error(f"Error type: {type(e)}")
