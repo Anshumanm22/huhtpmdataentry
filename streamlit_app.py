@@ -130,15 +130,37 @@ def get_school_teachers(school_name):
 def create_drive_service():
     """Create a Google Drive service"""
     try:
+        # Print out the keys in the service account to verify basic structure
+        st.write("Service Account Keys:", list(st.secrets["gcp_service_account"].keys()))
+        
         credentials = Credentials.from_service_account_info(
             st.secrets["gcp_service_account"],
             scopes=SCOPES
         )
-        return build('drive', 'v3', credentials=credentials)
+        
+        # Additional debug information
+        st.write("Credentials created successfully")
+        
+        drive_service = build('drive', 'v3', credentials=credentials)
+        
+        # Attempt a simple API call to verify connectivity
+        test_files = drive_service.files().list(pageSize=10, fields="nextPageToken, files(id, name)").execute()
+        st.write("Drive service connected successfully")
+        
+        return drive_service
     except Exception as e:
+        # Provide a more detailed error message
         st.error(f"Failed to connect to Google Drive: {str(e)}")
+        st.error(f"Error type: {type(e)}")
+        
+        # If it's a credential-related error, print more details
+        if 'Credentials' in str(type(e)):
+            st.error("Possible credential issues:")
+            st.error("1. Verify service account JSON is correct")
+            st.error("2. Check that APIs are enabled")
+            st.error("3. Ensure service account has correct permissions")
+        
         return None
-
 
 def handle_media_upload(teacher_name, school_name, visit_date):
     """Handle media upload for a specific observation"""
