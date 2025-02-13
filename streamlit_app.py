@@ -127,7 +127,7 @@ def get_school_teachers(school_name):
         st.error(f"Error fetching teachers: {str(e)}")
         return {"trained": [], "untrained": []}
 
-def handle_media_upload(teacher_name, school_name, visit_date):
+def handle_media_upload(teacher_name, school_name, visit_date, index):
     """Handle media upload for a specific observation"""
     uploaded_files = []
     
@@ -140,12 +140,11 @@ def handle_media_upload(teacher_name, school_name, visit_date):
             "Upload Photos (JPG, PNG)",
             type=['jpg', 'jpeg', 'png'],
             accept_multiple_files=True,
-            key=f"photos_{teacher_name}_{school_name}_{visit_date}"  # Make key more unique
+            key=f"photos_{index}_{teacher_name}_{school_name}_{visit_date}"
         )
         
         if photos:
             for photo in photos:
-                # Just store the file name for now
                 uploaded_files.append({
                     'type': 'photo',
                     'name': photo.name,
@@ -158,12 +157,11 @@ def handle_media_upload(teacher_name, school_name, visit_date):
             "Upload Videos (MP4)",
             type=['mp4'],
             accept_multiple_files=True,
-            key=f"videos_{teacher_name}_{school_name}_{visit_date}"  # Make key more unique
+            key=f"videos_{index}_{teacher_name}_{school_name}_{visit_date}"
         )
         
         if videos:
             for video in videos:
-                # Just store the file name for now
                 uploaded_files.append({
                     'type': 'video',
                     'name': video.name,
@@ -171,7 +169,6 @@ def handle_media_upload(teacher_name, school_name, visit_date):
                 })
     
     return uploaded_files
-
 
 def save_observation(data):
     """Save observation data to Google Sheets"""
@@ -392,9 +389,10 @@ def classroom_observation_section():
     st.write("---")
     st.subheader("Media Upload")
     media_files = handle_media_upload(
-        teacher,
-        st.session_state.basic_details["school_name"],
-        st.session_state.basic_details["visit_date"]
+    teacher,
+    st.session_state.basic_details["school_name"],
+    st.session_state.basic_details["visit_date"],
+    i  # Pass the index to ensure unique keys
     )
     if media_files:
         st.write("Uploaded Files:")
