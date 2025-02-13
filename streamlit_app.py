@@ -140,7 +140,7 @@ def handle_media_upload(teacher_name, school_name, visit_date):
             "Upload Photos (JPG, PNG)",
             type=['jpg', 'jpeg', 'png'],
             accept_multiple_files=True,
-            key=f"photos_{teacher_name}"
+            key=f"photos_{teacher_name}_{school_name}_{visit_date}"  # Make key more unique
         )
         
         if photos:
@@ -158,7 +158,7 @@ def handle_media_upload(teacher_name, school_name, visit_date):
             "Upload Videos (MP4)",
             type=['mp4'],
             accept_multiple_files=True,
-            key=f"videos_{teacher_name}"
+            key=f"videos_{teacher_name}_{school_name}_{visit_date}"  # Make key more unique
         )
         
         if videos:
