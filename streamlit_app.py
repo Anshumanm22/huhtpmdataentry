@@ -185,12 +185,12 @@ def basic_details_section():
     
     col1, col2 = st.columns(2)
     with col1:
-       program_managers = get_program_managers()
-    pm_name = st.selectbox(
-    "Program Manager Name",
-    options=program_managers if program_managers else ["No program managers found"],
-    help="Select your name from the list"
-)
+        program_managers = get_program_managers()
+        pm_name = st.selectbox(
+            "Program Manager Name",
+            options=program_managers if program_managers else ["No program managers found"],
+            help="Select your name from the list"
+        )
         if pm_name:
             schools = get_pm_schools(pm_name)
             school_name = st.selectbox(
