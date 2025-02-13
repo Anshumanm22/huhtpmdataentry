@@ -1,1 +1,10 @@
 streamlit
+pandas
+gspread
+google-auth
+openpyxl
+python-dateutil
+pytz
+validators
+numpy
+streamlit-option-menu
