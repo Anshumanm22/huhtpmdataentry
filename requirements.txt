@@ -8,3 +8,6 @@ pytz
 validators
 numpy
 streamlit-option-menu
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
