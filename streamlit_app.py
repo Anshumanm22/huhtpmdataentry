@@ -406,7 +406,7 @@ def classroom_observation_section():
 
     st.write("---")
     st.subheader("Media Upload")
-      media_files = handle_media_upload(
+    media_files = handle_media_upload(
     teacher,
     st.session_state.basic_details["school_name"],
     st.session_state.basic_details["visit_date"],
