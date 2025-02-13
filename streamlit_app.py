@@ -126,6 +126,107 @@ def get_school_teachers(school_name):
         st.error(f"Error fetching teachers: {str(e)}")
         return {"trained": [], "untrained": []}
 
+def handle_media_upload(teacher_name, school_name, visit_date):
+    """Handle media upload for a specific observation"""
+    # Create a unique key for file uploaders
+    unique_key = f"{teacher_name}_{school_name}_{visit_date}_{datetime.now().timestamp()}"
+    
+    # Initialize Drive service
+    drive_service = create_drive_service()
+    if not drive_service:
+        st.error("Could not initialize Google Drive service")
+        return []
+    
+    uploaded_files = []
+    
+    # Create columns for photos and videos
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Allow photo upload
+        photos = st.file_uploader(
+            "Upload Photos (JPG, PNG)",
+            type=['jpg', 'jpeg', 'png'],
+            accept_multiple_files=True,
+            key=f"photos_{unique_key}"
+        )
+        
+        if photos:
+            for photo in photos:
+                try:
+                    # Prepare file metadata
+                    file_metadata = {
+                        'name': f"{school_name}_{teacher_name}_{visit_date}_{photo.name}",
+                    }
+                    
+                    # Prepare media
+                    media = MediaIoBaseUpload(
+                        io.BytesIO(photo.getbuffer()),
+                        mimetype=mimetypes.guess_type(photo.name)[0],
+                        resumable=True
+                    )
+                    
+                    # Upload to Google Drive
+                    file = drive_service.files().create(
+                        body=file_metadata,
+                        media_body=media,
+                        fields='id, webViewLink'
+                    ).execute()
+                    
+                    # Store file information
+                    uploaded_files.append({
+                        'type': 'photo',
+                        'name': photo.name,
+                        'drive_file_id': file.get('id'),
+                        'link': file.get('webViewLink')
+                    })
+                except Exception as e:
+                    st.error(f"Error uploading photo {photo.name}: {str(e)}")
+    
+    with col2:
+        # Allow video upload
+        videos = st.file_uploader(
+            "Upload Videos (MP4)",
+            type=['mp4'],
+            accept_multiple_files=True,
+            key=f"videos_{unique_key}"
+        )
+        
+        if videos:
+            for video in videos:
+                try:
+                    # Prepare file metadata
+                    file_metadata = {
+                        'name': f"{school_name}_{teacher_name}_{visit_date}_{video.name}",
+                    }
+                    
+                    # Prepare media
+                    media = MediaIoBaseUpload(
+                        io.BytesIO(video.getbuffer()),
+                        mimetype=mimetypes.guess_type(video.name)[0],
+                        resumable=True
+                    )
+                    
+                    # Upload to Google Drive
+                    file = drive_service.files().create(
+                        body=file_metadata,
+                        media_body=media,
+                        fields='id, webViewLink'
+                    ).execute()
+                    
+                    # Store file information
+                    uploaded_files.append({
+                        'type': 'video',
+                        'name': video.name,
+                        'drive_file_id': file.get('id'),
+                        'link': file.get('webViewLink')
+                    })
+                except Exception as e:
+                    st.error(f"Error uploading video {video.name}: {str(e)}")
+    
+    return uploaded_files
+
+
 def save_observation(data):
     """Save observation data to Google Sheets"""
     sheet = get_or_create_sheet("Observations")
