@@ -129,6 +129,7 @@ def get_school_teachers(school_name):
 @st.cache_resource
 def create_drive_service():
     """Create a Google Drive service"""
+    st.write(list(st.secrets.keys()))
     try:
         # Print out the keys to verify
         print(list(st.secrets["gcp_service_account"].keys()))
