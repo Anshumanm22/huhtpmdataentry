@@ -5,34 +5,14 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 
-# Set page config with improved layout and theme
+# Set page config
 st.set_page_config(
     page_title="School Observation Form",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Add custom CSS for better button visibility and form layout
-st.markdown("""
-    <style>
-    .stButton > button {
-        width: 100%;
-        margin-top: 20px;
-        margin-bottom: 20px;
-        background-color: #ff4c4c;
-        color: white;
-    }
-    .nav-button {
-        padding: 15px 30px;
-        font-size: 16px;
-    }
-    .form-header {
-        margin-bottom: 30px;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-# Google Sheets setup remains the same
+# Google Sheets setup
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
@@ -40,62 +20,168 @@ SCOPES = [
 
 @st.cache_resource
 def connect_to_gsheets():
-    credentials = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"],
-        scopes=SCOPES
-    )
-    return gspread.authorize(credentials)
+    """Create a Google Sheets client"""
+    try:
+        credentials = Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
+            scopes=SCOPES
+        )
+        return gspread.authorize(credentials)
+    except Exception as e:
+        st.error(f"Failed to connect to Google Sheets: {str(e)}")
+        return None
 
 def get_or_create_sheet(sheet_name):
-    # Previous implementation remains the same
-    pass
+    """Get or create a specific worksheet"""
+    client = connect_to_gsheets()
+    if not client:
+        return None
+        
+    try:
+        # Try to open existing sheet
+        sheet = client.open("School_Observations").worksheet(sheet_name)
+        return sheet
+    except Exception:
+        try:
+            # If sheet doesn't exist, create it
+            workbook = client.open("School_Observations")
+        except Exception:
+            # If workbook doesn't exist, create it
+            workbook = client.create("School_Observations")
+            # Share with anyone who has the link
+            workbook.share(None, perm_type='anyone', role='writer')
+        
+        sheet = workbook.add_worksheet(sheet_name, 1000, 20)
+        
+        # Set up headers based on sheet type
+        if sheet_name == "Observations":
+            headers = ["Timestamp", "PM Name", "School Name", "Visit Date", "Visit Type", 
+                      "Teacher Details", "Observations", "Infrastructure Data", "Community Data"]
+        elif sheet_name == "Schools":
+            headers = ["School Name", "Program Manager", "Added Date"]
+        elif sheet_name == "Teachers":
+            headers = ["School Name", "Teacher Name", "Is Trained", "Added Date"]
+        
+        sheet.insert_row(headers, 1)
+        return sheet
+    
+    return None
 
-# Initialize session state with default values
+def get_pm_schools(pm_name):
+    """Get schools for a specific program manager"""
+    sheet = get_or_create_sheet("Schools")
+    if not sheet:
+        st.error("Unable to access schools data")
+        return []
+        
+    try:
+        schools_data = sheet.get_all_records()
+        return [school["School Name"] for school in schools_data if school["Program Manager"].lower() == pm_name.lower()]
+    except Exception as e:
+        st.error(f"Error fetching schools: {str(e)}")
+        return []
+
+def get_school_teachers(school_name):
+    """Get teachers for a specific school"""
+    sheet = get_or_create_sheet("Teachers")
+    if not sheet:
+        st.error("Unable to access teachers data")
+        return {"trained": [], "untrained": []}
+        
+    try:
+        teachers_data = sheet.get_all_records()
+        teachers = {
+            "trained": [],
+            "untrained": []
+        }
+        for teacher in teachers_data:
+            if teacher["School Name"] == school_name:
+                if teacher["Is Trained"]:
+                    teachers["trained"].append(teacher["Teacher Name"])
+                else:
+                    teachers["untrained"].append(teacher["Teacher Name"])
+        return teachers
+    except Exception as e:
+        st.error(f"Error fetching teachers: {str(e)}")
+        return {"trained": [], "untrained": []}
+
+def save_observation(data):
+    """Save observation data to Google Sheets"""
+    sheet = get_or_create_sheet("Observations")
+    if not sheet:
+        st.error("Unable to access observations sheet")
+        return False
+        
+    try:
+        row = [
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            data["basic_details"]["pm_name"],
+            data["basic_details"]["school_name"],
+            data["basic_details"]["visit_date"],
+            data["basic_details"]["visit_type"],
+            json.dumps(data["teacher_details"]),
+            json.dumps(data.get("observations", {})),
+            json.dumps(data.get("infrastructure", {})) if data["basic_details"]["visit_type"] == "Monthly" else "{}",
+            json.dumps(data.get("community", {})) if data["basic_details"]["visit_type"] == "Monthly" else "{}"
+        ]
+        sheet.append_row(row)
+        return True
+    except Exception as e:
+        st.error(f"Error saving observation: {str(e)}")
+        return False
+
+def add_new_teacher(school_name, teacher_name, is_trained):
+    """Add a new teacher to the database"""
+    sheet = get_or_create_sheet("Teachers")
+    if not sheet:
+        st.error("Unable to access teachers sheet")
+        return False
+        
+    try:
+        # Check if teacher already exists
+        teachers_data = sheet.get_all_records()
+        for teacher in teachers_data:
+            if (teacher["School Name"] == school_name and 
+                teacher["Teacher Name"].lower() == teacher_name.lower()):
+                st.error("Teacher already exists in this school")
+                return False
+        
+        row = [
+            school_name,
+            teacher_name,
+            is_trained,
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ]
+        sheet.append_row(row)
+        return True
+    except Exception as e:
+        st.error(f"Error adding teacher: {str(e)}")
+        return False
+
+# Initialize session state
 if 'page' not in st.session_state:
     st.session_state.page = 1
-    st.session_state.visit_type = 'Daily'  # Default visit type
+    st.session_state.visit_type = 'Daily'
 
 def basic_details_section():
-    st.markdown("<h2 class='form-header'>Basic Details</h2>", unsafe_allow_html=True)
+    st.subheader("Basic Details")
     
-    # Create three columns for better spacing
-    col1, col2, col3 = st.columns([1, 1, 1])
-    
+    col1, col2 = st.columns(2)
     with col1:
-        pm_name = st.text_input("Program Manager Name", 
-                               help="Enter your full name as registered")
-    
-    with col2:
-        # Only show schools if PM name is entered
+        pm_name = st.text_input("Program Manager Name")
         if pm_name:
             schools = get_pm_schools(pm_name)
             school_name = st.selectbox(
                 "School Name",
-                options=schools if schools else ["No schools found"],
-                help="Select the school you are visiting"
+                options=schools if schools else ["No schools found"]
             )
-        else:
-            school_name = None
-            st.info("Enter Program Manager name to see schools")
     
-    with col3:
-        visit_date = st.date_input(
-            "Date of Visit",
-            datetime.now(),
-            help="Select the date of your visit"
-        )
-        
-    # Visit type selector with immediate effect
-    visit_type = st.radio(
-        "Visit Type",
-        options=["Daily", "Monthly"],
-        horizontal=True,
-        help="Monthly visits include additional infrastructure and community sections"
-    )
-    st.session_state.visit_type = visit_type
+    with col2:
+        visit_date = st.date_input("Date of Visit", datetime.now())
+        visit_type = st.selectbox("Visit Type", options=["Daily", "Monthly"])
+        st.session_state.visit_type = visit_type
     
-    # Clear "Next" button at the bottom
-    if st.button("Continue to Teacher Selection →", type="primary"):
+    if st.button("Next →", type="primary"):
         if pm_name and school_name != "No schools found":
             st.session_state.basic_details = {
                 "pm_name": pm_name,
@@ -105,10 +191,10 @@ def basic_details_section():
             }
             st.session_state.page = 2
         else:
-            st.error("Please fill in all required fields")
+            st.error("Please fill in all fields")
 
 def teacher_selection_section():
-    st.markdown("<h2 class='form-header'>Teacher Selection</h2>", unsafe_allow_html=True)
+    st.subheader("Teacher Selection")
     
     if "basic_details" not in st.session_state:
         st.error("Please fill in basic details first")
@@ -116,8 +202,8 @@ def teacher_selection_section():
         return
     
     school_name = st.session_state.basic_details["school_name"]
+    teachers = get_school_teachers(school_name)
     
-    # Add new teacher in an expander to reduce visual clutter
     with st.expander("Add New Teacher"):
         col1, col2 = st.columns([2, 1])
         with col1:
@@ -130,35 +216,34 @@ def teacher_selection_section():
             )
         if st.button("Add Teacher", key="add_teacher"):
             if new_teacher_name:
-                if add_new_teacher(school_name, new_teacher_name, training_status == "Trained"):
+                if add_new_teacher(
+                    school_name,
+                    new_teacher_name,
+                    training_status == "Trained"
+                ):
                     st.success(f"Added teacher {new_teacher_name}")
                     st.rerun()
             else:
                 st.error("Please enter teacher name")
 
-    # Get existing teachers
-    teachers = get_school_teachers(school_name)
-    
-    # Display existing teachers in two columns
     col1, col2 = st.columns(2)
     with col1:
         trained_teachers = st.multiselect(
-            "Select Trained Teachers to Observe",
+            "Select Trained Teachers",
             options=teachers["trained"]
         )
     with col2:
         untrained_teachers = st.multiselect(
-            "Select Untrained Teachers to Observe",
+            "Select Untrained Teachers",
             options=teachers["untrained"]
         )
     
-    # Navigation buttons
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("← Back to Basic Details", key="back_to_basic"):
+        if st.button("← Previous"):
             st.session_state.page = 1
     with col2:
-        if st.button("Continue to Observations →", type="primary", key="to_observations"):
+        if st.button("Next →", type="primary"):
             if trained_teachers or untrained_teachers:
                 st.session_state.teacher_details = {
                     "trained_teachers": trained_teachers,
@@ -166,10 +251,10 @@ def teacher_selection_section():
                 }
                 st.session_state.page = 3
             else:
-                st.error("Please select at least one teacher to observe")
+                st.error("Please select at least one teacher")
 
 def classroom_observation_section():
-    st.markdown("<h2 class='form-header'>Classroom Observation</h2>", unsafe_allow_html=True)
+    st.subheader("Classroom Observation")
     
     if "teacher_details" not in st.session_state:
         st.error("Please select teachers first")
@@ -181,49 +266,51 @@ def classroom_observation_section():
         st.session_state.teacher_details["untrained_teachers"]
     )
     
-    # Create tabs for each teacher
+    if not all_teachers:
+        st.error("No teachers selected")
+        return
+    
     tabs = st.tabs(all_teachers)
     observations = {}
     
     for i, teacher in enumerate(all_teachers):
         with tabs[i]:
             col1, col2 = st.columns(2)
-            
             with col1:
-                st.subheader("Teacher Actions")
+                st.write("Teacher Actions")
                 teacher_metrics = {
                     "lesson_plan": st.selectbox(
-                        "Lesson plan shared in advance?",
+                        "Has the teacher shared the lesson plan?",
                         options=["Yes", "No", "Sometimes"],
                         key=f"{teacher}_lesson_plan"
                     ),
                     "movement": st.selectbox(
-                        "Moving around classroom?",
+                        "Is the teacher moving around?",
                         options=["Yes", "No", "Sometimes"],
                         key=f"{teacher}_movement"
                     ),
                     "activities": st.selectbox(
-                        "Using hands-on activities?",
+                        "Is the teacher using hands-on activities?",
                         options=["Yes", "No", "Sometimes"],
                         key=f"{teacher}_activities"
                     )
                 }
             
             with col2:
-                st.subheader("Student Actions")
+                st.write("Student Actions")
                 student_metrics = {
                     "questions": st.selectbox(
-                        "Students asking questions?",
+                        "Are students asking questions?",
                         options=["Yes", "No", "Sometimes"],
                         key=f"{teacher}_questions"
                     ),
                     "explanation": st.selectbox(
-                        "Students explaining work?",
+                        "Are students explaining their work?",
                         options=["Yes", "No", "Sometimes"],
                         key=f"{teacher}_explanation"
                     ),
                     "involvement": st.selectbox(
-                        "Students involved in activities?",
+                        "Are students involved in activities?",
                         options=["Yes", "No", "Sometimes"],
                         key=f"{teacher}_involvement"
                     )
@@ -234,14 +321,13 @@ def classroom_observation_section():
                 "student_metrics": student_metrics
             }
     
-    # Navigation
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2 = st.columns(2)
     with col1:
-        if st.button("← Back", key="back_to_teachers"):
+        if st.button("← Previous"):
             st.session_state.page = 2
-    with col3:
-        next_text = "Continue to Infrastructure →" if st.session_state.visit_type == "Monthly" else "Submit Form"
-        if st.button(next_text, type="primary", key="next_from_obs"):
+    with col2:
+        next_text = "Next →" if st.session_state.visit_type == "Monthly" else "Submit"
+        if st.button(next_text, type="primary"):
             st.session_state.observations = observations
             if st.session_state.visit_type == "Monthly":
                 st.session_state.page = 4
@@ -252,8 +338,8 @@ def infrastructure_section():
     if st.session_state.visit_type != "Monthly":
         st.session_state.page = 3
         return
-        
-    st.markdown("<h2 class='form-header'>Infrastructure Assessment</h2>", unsafe_allow_html=True)
+    
+    st.subheader("Infrastructure Assessment")
     
     subjects = ["Mathematics", "Science", "Language", "Social Studies"]
     infrastructure_data = {}
@@ -288,24 +374,22 @@ def infrastructure_section():
     
     st.session_state.infrastructure = infrastructure_data
     
-    # Navigation
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("← Back to Observations"):
+        if st.button("← Previous"):
             st.session_state.page = 3
     with col2:
-        if st.button("Continue to Community →", type="primary"):
+        if st.button("Next →", type="primary"):
             st.session_state.page = 5
 
 def community_section():
     if st.session_state.visit_type != "Monthly":
         st.session_state.page = 3
         return
-        
-    st.markdown("<h2 class='form-header'>Community Engagement</h2>", unsafe_allow_html=True)
+    
+    st.subheader("Community Engagement")
     
     col1, col2 = st.columns(2)
-    
     with col1:
         community_data = {
             "parent_meetings": st.number_input(
@@ -331,23 +415,20 @@ def community_section():
         })
     
     community_data["notes"] = st.text_area(
-        "Additional Notes",
-        placeholder="Enter any additional observations or comments..."
+        "Additional Notes"
     )
     
     st.session_state.community = community_data
     
-    # Navigation
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("← Back to Infrastructure"):
+        if st.button("← Previous"):
             st.session_state.page = 4
     with col2:
-        if st.button("Submit Form", type="primary"):
+        if st.button("Submit", type="primary"):
             submit_form()
 
 def submit_form():
-    """Handle form submission and data saving"""
     form_data = {
         "basic_details": st.session_state.basic_details,
         "teacher_details": st.session_state.teacher_details,
@@ -370,15 +451,12 @@ def submit_form():
 def main():
     st.title("School Observation Form")
     
-    # Show progress only for Monthly visits when appropriate
-    if st.session_state.get('visit_type') == 'Monthly':
-        progress_text = f"Page {st.session_state.page} of 5"
-        st.progress(st.session_state.page / 5, text=progress_text)
-    elif st.session_state.get('visit_type') == 'Daily':
-        progress_text = f"Page {st.session_state.page} of 3"
-        st.progress(st.session_state.page / 3, text=progress_text)
+    # Show progress based on visit type
+    total_pages = 5 if st.session_state.get('visit_type') == 'Monthly' else 3
+    progress_text = f"Page {st.session_state.page} of {total_pages}"
+    st.progress(st.session_state.page / total_pages, text=progress_text)
     
-    # Display appropriate section based on current page and visit type
+    # Display appropriate section
     if st.session_state.page == 1:
         basic_details_section()
     elif st.session_state.page == 2:
