@@ -126,6 +126,20 @@ def get_school_teachers(school_name):
         st.error(f"Error fetching teachers: {str(e)}")
         return {"trained": [], "untrained": []}
 
+@st.cache_resource
+def create_drive_service():
+    """Create a Google Drive service"""
+    try:
+        credentials = Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
+            scopes=SCOPES
+        )
+        return build('drive', 'v3', credentials=credentials)
+    except Exception as e:
+        st.error(f"Failed to connect to Google Drive: {str(e)}")
+        return None
+
+
 def handle_media_upload(teacher_name, school_name, visit_date):
     """Handle media upload for a specific observation"""
     # Create a unique key for file uploaders
@@ -450,10 +464,10 @@ def classroom_observation_section():
         st.session_state.basic_details["school_name"],
         st.session_state.basic_details["visit_date"]
     )
-    if media_files:
-        st.write("Uploaded Files:")
-        for file in media_files:
-            st.write(f"- [{file['name']}]({file['link']})")
+  if media_files:
+    st.write("Uploaded Files:")
+    for file in media_files:
+        st.write(f"- [{file['name']}]({file['link']})")
 
     observations[teacher].update({
         "media_files": media_files
