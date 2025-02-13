@@ -17,7 +17,6 @@ SCOPES = [
 # Function to connect to Google Sheets
 @st.cache_resource
 def connect_to_gsheets():
-    # Get the Google Sheets credentials from Streamlit secrets
     credentials = Credentials.from_service_account_info(
         st.secrets["gcp_service_account"],
         scopes=SCOPES
@@ -115,76 +114,266 @@ def add_new_teacher(school_name, teacher_name, is_trained):
         st.error(f"Error adding teacher: {str(e)}")
         return False
 
-[rest of the form sections remain similar to previous version...]
+def basic_details_section():
+    st.header("Basic Details")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        pm_name = st.text_input("Program Manager Name")
+        if pm_name:
+            schools = get_pm_schools(pm_name)
+            school_name = st.selectbox("School Name", options=schools if schools else ["No schools found"])
+    
+    with col2:
+        visit_date = st.date_input("Date of Visit", datetime.now())
+        visit_type = st.selectbox("Visit Type", options=["Daily", "Monthly"])
+    
+    if st.button("Next →"):
+        if pm_name and school_name != "No schools found":
+            st.session_state.basic_details = {
+                "pm_name": pm_name,
+                "school_name": school_name,
+                "visit_date": visit_date.strftime("%Y-%m-%d"),
+                "visit_type": visit_type
+            }
+            st.session_state.page = 2
+        else:
+            st.error("Please fill in all fields")
 
-def view_data_section():
-    st.title("View Observations")
+def teacher_selection_section():
+    st.header("Teacher Selection")
     
-    observations_sheet = get_or_create_sheet("Observations")
-    data = observations_sheet.get_all_records()
+    if "basic_details" not in st.session_state:
+        st.error("Please fill in basic details first")
+        st.session_state.page = 1
+        return
     
-    if data:
-        df = pd.DataFrame(data)
+    school_name = st.session_state.basic_details["school_name"]
+    teachers = get_school_teachers(school_name)
+    
+    st.subheader("Trained Teachers")
+    trained_teachers = st.multiselect(
+        "Select trained teachers to observe",
+        options=teachers["trained"]
+    )
+    
+    st.subheader("Untrained Teachers")
+    untrained_teachers = st.multiselect(
+        "Select untrained teachers to observe",
+        options=teachers["untrained"]
+    )
+    
+    # Option to add new teacher
+    if st.checkbox("Add New Teacher"):
+        new_teacher_name = st.text_input("New Teacher Name")
+        training_status = st.radio(
+            "Training Status",
+            options=["Trained", "Untrained"]
+        )
+        if st.button("Add Teacher"):
+            if add_new_teacher(
+                school_name,
+                new_teacher_name,
+                training_status == "Trained"
+            ):
+                st.success(f"Added teacher {new_teacher_name}")
+                st.experimental_rerun()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("← Previous"):
+            st.session_state.page = 1
+    with col2:
+        if st.button("Next →"):
+            if trained_teachers or untrained_teachers:
+                st.session_state.teacher_details = {
+                    "trained_teachers": trained_teachers,
+                    "untrained_teachers": untrained_teachers
+                }
+                st.session_state.page = 3
+            else:
+                st.error("Please select at least one teacher")
+
+def classroom_observation_section():
+    st.header("Classroom Observation")
+    
+    if "teacher_details" not in st.session_state:
+        st.error("Please select teachers first")
+        st.session_state.page = 2
+        return
+    
+    observations = {}
+    
+    all_teachers = (
+        st.session_state.teacher_details["trained_teachers"] +
+        st.session_state.teacher_details["untrained_teachers"]
+    )
+    
+    for teacher in all_teachers:
+        st.subheader(f"Observation for {teacher}")
         
-        # Filters
-        col1, col2 = st.columns(2)
-        with col1:
-            pm_filter = st.multiselect(
-                "Filter by Program Manager",
-                options=df["PM Name"].unique()
+        # Teacher actions
+        st.write("Teacher Actions")
+        teacher_metrics = {
+            "lesson_plan": st.selectbox(
+                "Has the teacher shared the lesson plan in advance?",
+                options=["Yes", "No", "Sometimes"],
+                key=f"{teacher}_lesson_plan"
+            ),
+            "movement": st.selectbox(
+                "Is the teacher moving around in the classroom?",
+                options=["Yes", "No", "Sometimes"],
+                key=f"{teacher}_movement"
+            ),
+            "activities": st.selectbox(
+                "Is the teacher using hands-on activities?",
+                options=["Yes", "No", "Sometimes"],
+                key=f"{teacher}_activities"
             )
-        with col2:
-            school_filter = st.multiselect(
-                "Filter by School",
-                options=df["School Name"].unique()
+        }
+        
+        # Student actions
+        st.write("Student Actions")
+        student_metrics = {
+            "questions": st.selectbox(
+                "Are children asking questions?",
+                options=["Yes", "No", "Sometimes"],
+                key=f"{teacher}_questions"
+            ),
+            "explanation": st.selectbox(
+                "Are children explaining their work?",
+                options=["Yes", "No", "Sometimes"],
+                key=f"{teacher}_explanation"
+            ),
+            "involvement": st.selectbox(
+                "Are children involved in the activities?",
+                options=["Yes", "No", "Sometimes"],
+                key=f"{teacher}_involvement"
             )
+        }
         
-        # Apply filters
-        if pm_filter:
-            df = df[df["PM Name"].isin(pm_filter)]
-        if school_filter:
-            df = df[df["School Name"].isin(school_filter)]
+        observations[teacher] = {
+            "teacher_metrics": teacher_metrics,
+            "student_metrics": student_metrics
+        }
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("← Previous"):
+            st.session_state.page = 2
+    with col2:
+        if st.button("Next →"):
+            st.session_state.observations = observations
+            st.session_state.page = 4
+
+def infrastructure_section():
+    st.header("Infrastructure Assessment")
+    
+    if st.session_state.basic_details["visit_type"] == "Monthly":
+        subjects = ["Mathematics", "Science", "Language", "Social Studies"]
+        infrastructure_data = {}
         
-        # Display data
-        st.dataframe(df)
-        
-        # Download option
-        if st.button("Download as Excel"):
-            df.to_excel("observations.xlsx", index=False)
-            with open("observations.xlsx", "rb") as f:
-                st.download_button(
-                    "Click to Download",
-                    f,
-                    "school_observations.xlsx",
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        for subject in subjects:
+            st.subheader(f"{subject} Infrastructure")
+            infrastructure_data[subject] = {
+                "materials": st.selectbox(
+                    f"Are learning materials available for {subject}?",
+                    options=["Yes", "No", "Partial"],
+                    key=f"{subject}_materials"
+                ),
+                "storage": st.selectbox(
+                    f"Is there proper storage for {subject} materials?",
+                    options=["Yes", "No", "Partial"],
+                    key=f"{subject}_storage"
+                ),
+                "condition": st.selectbox(
+                    f"What is the condition of {subject} materials?",
+                    options=["Good", "Fair", "Poor"],
+                    key=f"{subject}_condition"
                 )
-    else:
-        st.info("No observations recorded yet")
+            }
+        
+        st.session_state.infrastructure = infrastructure_data
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("← Previous"):
+            st.session_state.page = 3
+    with col2:
+        if st.button("Next →"):
+            st.session_state.page = 5
+
+def community_section():
+    st.header("Community Engagement")
+    
+    if st.session_state.basic_details["visit_type"] == "Monthly":
+        community_data = {
+            "parent_meetings": st.number_input(
+                "Number of parent meetings conducted this month",
+                min_value=0
+            ),
+            "parent_attendance": st.slider(
+                "Average parent attendance percentage",
+                0, 100, 50
+            ),
+            "community_events": st.number_input(
+                "Number of community events organized",
+                min_value=0
+            ),
+            "smc_meetings": st.number_input(
+                "Number of School Management Committee meetings",
+                min_value=0
+            )
+        }
+        
+        community_data["notes"] = st.text_area(
+            "Additional community engagement notes"
+        )
+        
+        st.session_state.community = community_data
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("← Previous"):
+            st.session_state.page = 4
+    with col2:
+        if st.button("Submit Form"):
+            # Compile all data
+            form_data = {
+                "basic_details": st.session_state.basic_details,
+                "teacher_details": st.session_state.teacher_details,
+                "observations": st.session_state.get("observations", {}),
+                "infrastructure": st.session_state.get("infrastructure", {}),
+                "community": st.session_state.get("community", {})
+            }
+            
+            if save_observation(form_data):
+                st.success("Form submitted successfully!")
+                st.session_state.page = 1  # Reset to first page
+                # Clear session state except page number
+                for key in list(st.session_state.keys()):
+                    if key != "page":
+                        del st.session_state[key]
+            else:
+                st.error("Error submitting form. Please try again.")
 
 def main():
     st.title("School Observation Form")
     
-    # Add sidebar for navigation
-    menu = ["Submit Observation", "View Data"]
-    choice = st.sidebar.selectbox("Menu", menu)
+    # Display progress
+    st.progress(st.session_state.page / 5)
     
-    if choice == "Submit Observation":
-        # Display progress
-        st.progress(st.session_state.page / 5)
-        
-        # Display appropriate section based on current page
-        if st.session_state.page == 1:
-            basic_details_section()
-        elif st.session_state.page == 2:
-            teacher_selection_section()
-        elif st.session_state.page == 3:
-            classroom_observation_section()
-        elif st.session_state.page == 4:
-            infrastructure_section()
-        elif st.session_state.page == 5:
-            community_section()
-    else:
-        view_data_section()
+    # Display appropriate section based on current page
+    if st.session_state.page == 1:
+        basic_details_section()
+    elif st.session_state.page == 2:
+        teacher_selection_section()
+    elif st.session_state.page == 3:
+        classroom_observation_section()
+    elif st.session_state.page == 4:
+        infrastructure_section()
+    elif st.session_state.page == 5:
+        community_section()
 
 if __name__ == "__main__":
     main()
