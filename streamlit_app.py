@@ -406,20 +406,20 @@ def classroom_observation_section():
     "student_metrics": student_metrics
 }
 
-st.write("---")
-st.subheader("Media Upload")
-media_files = handle_media_upload(
-    teacher,
-    st.session_state.basic_details["school_name"],
-    st.session_state.basic_details["visit_date"]
-)
-if media_files:
-    st.write("Uploaded Files:")
-    for file in media_files:
-        st.write(f"- {file['name']}")
-
-# Safely add media files
-observations[teacher]["media_files"] = media_files
+    st.write("---")
+    st.subheader("Media Upload")
+    media_files = handle_media_upload(
+        teacher,
+        st.session_state.basic_details["school_name"],
+        st.session_state.basic_details["visit_date"]
+    )
+    if media_files:
+        st.write("Uploaded Files:")
+        for file in media_files:
+            st.write(f"- {file['name']}")
+    
+    # Safely add media files
+    observations[teacher]["media_files"] = media_files
     
     col1, col2 = st.columns(2)
     with col1:
