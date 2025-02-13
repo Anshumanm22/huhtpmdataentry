@@ -67,6 +67,23 @@ def get_or_create_sheet(sheet_name):
     
     return None
 
+def get_program_managers():
+    """Get list of all program managers from Schools sheet"""
+    sheet = get_or_create_sheet("Schools")
+    if not sheet:
+        st.error("Unable to access schools data")
+        return []
+        
+    try:
+        schools_data = sheet.get_all_records()
+        # Get unique PM names
+        pm_names = list(set(school["Program Manager"] for school in schools_data))
+        return sorted(pm_names)  # Sort alphabetically
+    except Exception as e:
+        st.error(f"Error fetching program managers: {str(e)}")
+        return []
+
+
 def get_pm_schools(pm_name):
     """Get schools for a specific program manager"""
     sheet = get_or_create_sheet("Schools")
@@ -168,7 +185,12 @@ def basic_details_section():
     
     col1, col2 = st.columns(2)
     with col1:
-        pm_name = st.text_input("Program Manager Name")
+       program_managers = get_program_managers()
+    pm_name = st.selectbox(
+    "Program Manager Name",
+    options=program_managers if program_managers else ["No program managers found"],
+    help="Select your name from the list"
+)
         if pm_name:
             schools = get_pm_schools(pm_name)
             school_name = st.selectbox(
