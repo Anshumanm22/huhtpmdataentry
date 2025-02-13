@@ -151,33 +151,42 @@ def teacher_selection_section():
     school_name = st.session_state.basic_details["school_name"]
     teachers = get_school_teachers(school_name)
     
-    st.subheader("Trained Teachers")
-    trained_teachers = st.multiselect(
-        "Select trained teachers to observe",
-        options=teachers["trained"]
-    )
-    
-    st.subheader("Untrained Teachers")
-    untrained_teachers = st.multiselect(
-        "Select untrained teachers to observe",
-        options=teachers["untrained"]
-    )
-    
-    # Option to add new teacher
-    if st.checkbox("Add New Teacher"):
+    # Add new teacher section at the top
+    st.subheader("Add New Teacher")
+    col1, col2 = st.columns(2)
+    with col1:
         new_teacher_name = st.text_input("New Teacher Name")
+    with col2:
         training_status = st.radio(
             "Training Status",
             options=["Trained", "Untrained"]
         )
-        if st.button("Add Teacher"):
+    if st.button("Add Teacher"):
+        if new_teacher_name:
             if add_new_teacher(
                 school_name,
                 new_teacher_name,
                 training_status == "Trained"
             ):
                 st.success(f"Added teacher {new_teacher_name}")
-                st.experimental_rerun()
+                # Automatically refresh teachers list
+                teachers = get_school_teachers(school_name)
+                st.rerun()
+        else:
+            st.error("Please enter teacher name")
+
+    # Select existing teachers
+    st.subheader("Select Teachers to Observe")
+    
+    trained_teachers = st.multiselect(
+        "Trained teachers",
+        options=teachers["trained"]
+    )
+    
+    untrained_teachers = st.multiselect(
+        "Untrained teachers",
+        options=teachers["untrained"]
+    )
     
     col1, col2 = st.columns(2)
     with col1:
@@ -192,7 +201,7 @@ def teacher_selection_section():
                 }
                 st.session_state.page = 3
             else:
-                st.error("Please select at least one teacher")
+                st.error("Please select at least one teacher to observe")
 
 def classroom_observation_section():
     st.header("Classroom Observation")
