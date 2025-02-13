@@ -127,6 +127,52 @@ def get_school_teachers(school_name):
         st.error(f"Error fetching teachers: {str(e)}")
         return {"trained": [], "untrained": []}
 
+def handle_media_upload(teacher_name, school_name, visit_date):
+    """Handle media upload for a specific observation"""
+    uploaded_files = []
+    
+    # Create columns for photos and videos
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Allow photo upload
+        photos = st.file_uploader(
+            "Upload Photos (JPG, PNG)",
+            type=['jpg', 'jpeg', 'png'],
+            accept_multiple_files=True,
+            key=f"photos_{teacher_name}"
+        )
+        
+        if photos:
+            for photo in photos:
+                # Just store the file name for now
+                uploaded_files.append({
+                    'type': 'photo',
+                    'name': photo.name,
+                    'data': photo
+                })
+    
+    with col2:
+        # Allow video upload
+        videos = st.file_uploader(
+            "Upload Videos (MP4)",
+            type=['mp4'],
+            accept_multiple_files=True,
+            key=f"videos_{teacher_name}"
+        )
+        
+        if videos:
+            for video in videos:
+                # Just store the file name for now
+                uploaded_files.append({
+                    'type': 'video',
+                    'name': video.name,
+                    'data': video
+                })
+    
+    return uploaded_files
+
+
 def save_observation(data):
     """Save observation data to Google Sheets"""
     sheet = get_or_create_sheet("Observations")
