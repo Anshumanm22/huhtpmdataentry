@@ -1,9 +1,9 @@
+# utility.py
 import streamlit as st
-from datetime import datetime
-import gspread
-from google.oauth2.service_account import Credentials
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
+import gspread
 import json
 import io
 import mimetypes
@@ -16,42 +16,23 @@ SCOPES = [
 ]
 
 @st.cache_resource
-# utility.py
-@st.cache_resource
-# utility.py
-@st.cache_resource
 def get_google_services():
-    """Initialize Google Drive and Sheets services"""
+    """Get Google Drive and Sheets services using service account."""
     try:
-        # Debug: Check if secrets are loaded
-        if "gcp_service_account" not in st.secrets:
-            st.error("gcp_service_account not found in secrets")
-            return None, None
-            
-        # Convert the service account info to a proper dictionary
-        service_account_info = {}
-        for key in st.secrets["gcp_service_account"]:
-            service_account_info[key] = st.secrets["gcp_service_account"][key]
-        
-        # Debug: Print service account info structure (safely)
-        st.write("Service Account Keys:", list(service_account_info.keys()))
-        
-        credentials = Credentials.from_service_account_info(
-            service_account_info,
+        # Using the same approach as the working Drive upload code
+        credentials = service_account.Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
             scopes=SCOPES
         )
         
         drive_service = build('drive', 'v3', credentials=credentials)
         sheets_client = gspread.authorize(credentials)
         
-        st.success("Successfully initialized Google services")
         return drive_service, sheets_client
         
     except Exception as e:
-        st.error(f"Failed to initialize Google services: {str(e)}")
+        st.error(f"Error setting up Google services: {str(e)}")
         st.error(f"Error type: {type(e)}")
-        if hasattr(e, 'args') and e.args:
-            st.error(f"Error details: {e.args}")
         return None, None
 
 def upload_to_drive(service, file_data, filename, mimetype, folder_id):
