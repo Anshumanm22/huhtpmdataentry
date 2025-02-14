@@ -1,6 +1,6 @@
 # app.py
-from .utility import get_google_services
-from .form_sections import (
+from utility import get_google_services
+from form_sections import (
     basic_details_section, 
     teacher_selection_section,
     classroom_observation_section, 
