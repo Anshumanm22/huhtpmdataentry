@@ -45,13 +45,25 @@ def get_google_services():
         
 class VisitFormApp:
     def __init__(self):
-        self.drive_service, self.sheets_service = get_google_services()
-        self.SHEET_ID = "YOUR_SHEET_ID"  # Replace with your sheet ID
-        self.load_mappings()
+        services = get_google_services()
+        if not services or None in services:
+            st.error("Failed to initialize Google services")
+            self.drive_service = None
+            self.sheets_service = None
+            self.pm_school_mapping = {}
+            self.school_teacher_mapping = {}
+        else:
+            self.drive_service, self.sheets_service = services
+            self.SHEET_ID = "1V6aftxdLQs-ZCbqxQo5Bt-JZf6Md3HyN5CbRZz3vzrM"  # Your sheet ID
+            self.load_mappings()
         self.setup_sidebar()
         
     def load_mappings(self):
         """Load school and teacher data from Google Sheets"""
+        if not self.sheets_service:
+            st.error("Google Sheets service not available")
+            return
+            
         try:
             # Load Schools data
             result = self.sheets_service.spreadsheets().values().get(
