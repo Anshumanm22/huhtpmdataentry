@@ -16,32 +16,42 @@ SCOPES = [
 ]
 
 @st.cache_resource
+# utility.py
+@st.cache_resource
 def get_google_services():
     """Initialize Google Drive and Sheets services"""
     try:
+        # Debug: Check if secrets are loaded
+        if "gcp_service_account" not in st.secrets:
+            st.error("gcp_service_account not found in secrets")
+            return None, None
+            
+        # Debug: Print service account info structure (safely)
+        service_account_info = st.secrets["gcp_service_account"]
+        st.write("Service Account Keys:", list(service_account_info.keys()))
+        
+        # Debug: Check required fields
+        required_fields = ["type", "project_id", "private_key", "client_email"]
+        missing_fields = [field for field in required_fields if field not in service_account_info]
+        if missing_fields:
+            st.error(f"Missing required fields in service account: {missing_fields}")
+            return None, None
+        
         credentials = Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
+            service_account_info,
             scopes=SCOPES
         )
+        
         drive_service = build('drive', 'v3', credentials=credentials)
         sheets_client = gspread.authorize(credentials)
+        
+        st.success("Successfully initialized Google services")
         return drive_service, sheets_client
+        
     except Exception as e:
         st.error(f"Failed to initialize Google services: {str(e)}")
+        st.error(f"Error type: {type(e)}")
         return None, None
-
-def check_folder_access(service, folder_id):
-    """Verify access to Google Drive folder"""
-    try:
-        service.files().list(
-            q=f"'{folder_id}' in parents",
-            fields="files(id, name)",
-            spaces='drive'
-        ).execute()
-        return True
-    except Exception as e:
-        st.error(f"Error accessing folder: {str(e)}")
-        return False
 
 def upload_to_drive(service, file_data, filename, mimetype, folder_id):
     """Upload file to Google Drive"""
