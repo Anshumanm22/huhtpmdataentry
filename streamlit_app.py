@@ -1,6 +1,6 @@
 # app.py
 from utility import get_google_services
-from form_sections import *
+from forms_sections import *
 
 # Set page config
 st.set_page_config(
