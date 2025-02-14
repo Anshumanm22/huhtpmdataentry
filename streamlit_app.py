@@ -17,6 +17,18 @@ if 'form_data' not in st.session_state:
 def get_google_services():
     """Get Google Drive and Sheets services using service account."""
     try:
+        # Debug: Check if secrets are loaded
+        if "gcp_service_account" not in st.secrets:
+            st.error("gcp_service_account not found in secrets")
+            return None, None
+            
+        # Debug: Check service account structure
+        required_fields = ["type", "project_id", "private_key", "client_email"]
+        missing_fields = [field for field in required_fields if field not in st.secrets["gcp_service_account"]]
+        if missing_fields:
+            st.error(f"Missing required fields in service account: {missing_fields}")
+            return None, None
+            
         credentials = service_account.Credentials.from_service_account_info(
             st.secrets["gcp_service_account"],
             scopes=['https://www.googleapis.com/auth/drive.file',
@@ -30,7 +42,7 @@ def get_google_services():
     except Exception as e:
         st.error(f"Error setting up Google services: {str(e)}")
         return None, None
-
+        
 class VisitFormApp:
     def __init__(self):
         self.drive_service, self.sheets_service = get_google_services()
