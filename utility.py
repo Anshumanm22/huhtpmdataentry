@@ -18,6 +18,8 @@ SCOPES = [
 @st.cache_resource
 # utility.py
 @st.cache_resource
+# utility.py
+@st.cache_resource
 def get_google_services():
     """Initialize Google Drive and Sheets services"""
     try:
@@ -26,16 +28,13 @@ def get_google_services():
             st.error("gcp_service_account not found in secrets")
             return None, None
             
-        # Debug: Print service account info structure (safely)
-        service_account_info = st.secrets["gcp_service_account"]
-        st.write("Service Account Keys:", list(service_account_info.keys()))
+        # Convert the service account info to a proper dictionary
+        service_account_info = {}
+        for key in st.secrets["gcp_service_account"]:
+            service_account_info[key] = st.secrets["gcp_service_account"][key]
         
-        # Debug: Check required fields
-        required_fields = ["type", "project_id", "private_key", "client_email"]
-        missing_fields = [field for field in required_fields if field not in service_account_info]
-        if missing_fields:
-            st.error(f"Missing required fields in service account: {missing_fields}")
-            return None, None
+        # Debug: Print service account info structure (safely)
+        st.write("Service Account Keys:", list(service_account_info.keys()))
         
         credentials = Credentials.from_service_account_info(
             service_account_info,
@@ -51,6 +50,8 @@ def get_google_services():
     except Exception as e:
         st.error(f"Failed to initialize Google services: {str(e)}")
         st.error(f"Error type: {type(e)}")
+        if hasattr(e, 'args') and e.args:
+            st.error(f"Error details: {e.args}")
         return None, None
 
 def upload_to_drive(service, file_data, filename, mimetype, folder_id):
