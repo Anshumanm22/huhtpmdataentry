@@ -1,13 +1,6 @@
 # app.py
 from utility import get_google_services
-from form_sections import (
-    basic_details_section, 
-    teacher_selection_section,
-    classroom_observation_section, 
-    infrastructure_section,
-    community_section, 
-    save_observation
-)
+from form_sections import *
 
 # Set page config
 st.set_page_config(
