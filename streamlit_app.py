@@ -34,7 +34,7 @@ def get_google_services():
 class VisitFormApp:
     def __init__(self):
         self.drive_service, self.sheets_service = get_google_services()
-        self.SHEET_ID = "1EthvhhCttQDabz1qJenLqHTDDJ1zFxK-rFZMQH9p4uw"  # Replace with your sheet ID
+        self.SHEET_ID = "YOUR_SHEET_ID"  # Replace with your sheet ID
         self.load_mappings()
         self.setup_sidebar()
         
@@ -79,6 +79,300 @@ class VisitFormApp:
             st.error(f"Error loading mappings: {str(e)}")
             self.pm_school_mapping = {}
             self.school_teacher_mapping = {}
+    
+    def setup_sidebar(self):
+        """Setup sidebar navigation"""
+        with st.sidebar:
+            st.header("Visit Form Sections")
+            current_section = st.session_state.page
+            sections = [
+                "Basic Details",
+                "Teacher Selection",
+                "Classroom Observation",
+                "Infrastructure (Monthly)",
+                "Community Engagement (Monthly)"
+            ]
+            
+            for i, section in enumerate(sections, 1):
+                if i == current_section:
+                    st.markdown(f"**→ {i}. {section}**")
+                else:
+                    st.markdown(f"{i}. {section}")
+
+    def section_1_basic_details(self):
+        """Basic Details Form Section"""
+        st.header("Basic Details")
+        
+        if not self.pm_school_mapping:
+            st.error("Unable to load Program Manager mappings. Please check the configuration.")
+            return
+            
+        col1, col2 = st.columns(2)
+        with col1:
+            pm_name = st.selectbox(
+                "Program Manager",
+                options=list(self.pm_school_mapping.keys())
+            )
+            
+            if pm_name:
+                school_options = self.pm_school_mapping[pm_name]
+                school_name = st.selectbox(
+                    "School",
+                    options=school_options
+                )
+        
+        with col2:
+            visit_date = st.date_input("Date of Visit")
+            visit_type = st.selectbox(
+                "Visit Type",
+                options=["Daily", "Monthly"]
+            )
+        
+        if st.button("Next →", type="primary"):
+            if pm_name and school_name and visit_date:
+                st.session_state.form_data.update({
+                    "pm_name": pm_name,
+                    "school_name": school_name,
+                    "visit_date": visit_date.strftime("%Y-%m-%d"),
+                    "visit_type": visit_type
+                })
+                st.session_state.page = 2
+                st.rerun()
+            else:
+                st.error("Please fill all required fields")
+
+    def section_2_teacher_selection(self):
+        """Teacher Selection Form Section"""
+        st.header("Teacher Selection")
+        
+        if "school_name" not in st.session_state.form_data:
+            st.error("Please complete basic details first")
+            st.session_state.page = 1
+            return
+        
+        school = st.session_state.form_data["school_name"]
+        teachers = self.school_teacher_mapping.get(school, {"trained": [], "untrained": []})
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_trained = st.multiselect(
+                "Select Trained Teachers",
+                options=teachers["trained"]
+            )
+        
+        with col2:
+            selected_untrained = st.multiselect(
+                "Select Untrained Teachers",
+                options=teachers["untrained"]
+            )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("← Previous"):
+                st.session_state.page = 1
+                st.rerun()
+        
+        with col2:
+            if st.button("Next →", type="primary"):
+                if selected_trained or selected_untrained:
+                    st.session_state.form_data.update({
+                        "trained_teachers": selected_trained,
+                        "untrained_teachers": selected_untrained
+                    })
+                    st.session_state.page = 3
+                    st.rerun()
+                else:
+                    st.error("Please select at least one teacher")
+
+    def section_3_classroom_observation(self):
+        """Classroom Observation Form Section"""
+        st.header("Classroom Observation")
+        
+        if "trained_teachers" not in st.session_state.form_data:
+            st.error("Please select teachers first")
+            st.session_state.page = 2
+            return
+        
+        all_teachers = (
+            st.session_state.form_data["trained_teachers"] +
+            st.session_state.form_data["untrained_teachers"]
+        )
+        
+        if not all_teachers:
+            st.error("No teachers selected")
+            return
+        
+        tabs = st.tabs(all_teachers)
+        observations = {}
+        
+        for i, teacher in enumerate(all_teachers):
+            with tabs[i]:
+                st.subheader(f"Observing {teacher}")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("##### Teacher Actions")
+                    teacher_metrics = {
+                        "lesson_plan": st.selectbox(
+                            "Has the teacher shared the lesson plan?",
+                            options=["Yes", "No", "Sometimes"],
+                            key=f"{teacher}_lesson"
+                        ),
+                        "movement": st.selectbox(
+                            "Is the teacher moving around?",
+                            options=["Yes", "No", "Sometimes"],
+                            key=f"{teacher}_movement"
+                        ),
+                        "activities": st.selectbox(
+                            "Is the teacher using hands-on activities?",
+                            options=["Yes", "No", "Sometimes"],
+                            key=f"{teacher}_activities"
+                        )
+                    }
+                
+                with col2:
+                    st.markdown("##### Student Actions")
+                    student_metrics = {
+                        "questions": st.selectbox(
+                            "Are students asking questions?",
+                            options=["Yes", "No", "Sometimes"],
+                            key=f"{teacher}_questions"
+                        ),
+                        "participation": st.selectbox(
+                            "Are students participating in activities?",
+                            options=["Yes", "No", "Sometimes"],
+                            key=f"{teacher}_participation"
+                        ),
+                        "peer_learning": st.selectbox(
+                            "Are students helping each other learn?",
+                            options=["Yes", "No", "Sometimes"],
+                            key=f"{teacher}_peer"
+                        )
+                    }
+                
+                observations[teacher] = {
+                    "teacher_metrics": teacher_metrics,
+                    "student_metrics": student_metrics
+                }
+        
+        st.session_state.form_data["observations"] = observations
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("← Previous"):
+                st.session_state.page = 2
+                st.rerun()
+        
+        with col2:
+            next_button = "Next →" if st.session_state.form_data["visit_type"] == "Monthly" else "Submit"
+            if st.button(next_button, type="primary"):
+                if st.session_state.form_data["visit_type"] == "Monthly":
+                    st.session_state.page = 4
+                else:
+                    self.save_form_data()
+                st.rerun()
+
+    def section_4_infrastructure(self):
+        """Infrastructure Assessment Form Section"""
+        st.header("Infrastructure Assessment")
+        
+        if st.session_state.form_data["visit_type"] != "Monthly":
+            st.session_state.page = 3
+            return
+        
+        subjects = ["Mathematics", "Science", "Language", "Social Studies"]
+        infrastructure_data = {}
+        
+        for subject in subjects:
+            with st.expander(f"{subject} Infrastructure", expanded=True):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    materials = st.selectbox(
+                        "Learning materials available?",
+                        options=["Yes", "No", "Partial"],
+                        key=f"{subject}_materials"
+                    )
+                with col2:
+                    storage = st.selectbox(
+                        "Proper storage available?",
+                        options=["Yes", "No", "Partial"],
+                        key=f"{subject}_storage"
+                    )
+                with col3:
+                    condition = st.selectbox(
+                        "Material condition",
+                        options=["Good", "Fair", "Poor"],
+                        key=f"{subject}_condition"
+                    )
+                
+                infrastructure_data[subject] = {
+                    "materials": materials,
+                    "storage": storage,
+                    "condition": condition
+                }
+        
+        st.session_state.form_data["infrastructure"] = infrastructure_data
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("← Previous"):
+                st.session_state.page = 3
+                st.rerun()
+        
+        with col2:
+            if st.button("Next →", type="primary"):
+                st.session_state.page = 5
+                st.rerun()
+
+    def section_5_community(self):
+        """Community Engagement Form Section"""
+        st.header("Community Engagement")
+        
+        if st.session_state.form_data["visit_type"] != "Monthly":
+            st.session_state.page = 3
+            return
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            community_data = {
+                "parent_meetings": st.number_input(
+                    "Number of parent meetings this month",
+                    min_value=0
+                ),
+                "parent_attendance": st.slider(
+                    "Average parent attendance (%)",
+                    0, 100, 50
+                )
+            }
+        
+        with col2:
+            community_data.update({
+                "community_events": st.number_input(
+                    "Number of community events",
+                    min_value=0
+                ),
+                "smc_meetings": st.number_input(
+                    "Number of SMC meetings",
+                    min_value=0
+                )
+            })
+        
+        community_data["notes"] = st.text_area(
+            "Additional Notes"
+        )
+        
+        st.session_state.form_data["community"] = community_data
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("← Previous"):
+                st.session_state.page = 4
+                st.rerun()
+        
+        with col2:
+            if st.button("Submit", type="primary"):
+                self.save_form_data()
+                st.rerun()
 
     def save_form_data(self):
         """Save form data to Observations tab"""
@@ -124,7 +418,6 @@ class VisitFormApp:
             body = {
                 'values': [data]
             }
-            
             result = self.sheets_service.spreadsheets().values().append(
                 spreadsheetId=self.SHEET_ID,
                 range='Observations!A1',
@@ -140,8 +433,6 @@ class VisitFormApp:
         except Exception as e:
             st.error(f"Error saving form data: {str(e)}")
             st.error(str(e))
-
-    # [Rest of the class methods remain the same...]
 
     def run(self):
         """Main app entry point"""
