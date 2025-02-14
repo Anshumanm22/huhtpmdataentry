@@ -19,20 +19,65 @@ SCOPES = [
 def get_google_services():
     """Get Google Drive and Sheets services using service account."""
     try:
-        # Using the same approach as the working Drive upload code
+        # Debug: Print secrets structure
+        if "gcp_service_account" not in st.secrets:
+            st.error("No 'gcp_service_account' secret found")
+            return None, None
+        
+        # Try to parse the service account info
+        service_account_info = st.secrets["gcp_service_account"]
+        st.write("Service Account Info Type:", type(service_account_info))
+        st.write("Available keys:", service_account_info.keys())
+        
+        # Check specific required fields
+        required_fields = ["type", "project_id", "private_key_id", "private_key", "client_email"]
+        for field in required_fields:
+            if field not in service_account_info:
+                st.error(f"Missing required field: {field}")
+            else:
+                # Safely print the first few characters of each field
+                value = service_account_info[field]
+                safe_value = str(value)[:10] + "..." if len(str(value)) > 10 else str(value)
+                st.write(f"{field}: {safe_value}")
+        
+        # Manually construct the credentials dict
+        credentials_dict = {
+            "type": service_account_info["type"],
+            "project_id": service_account_info["project_id"],
+            "private_key_id": service_account_info["private_key_id"],
+            "private_key": service_account_info["private_key"],
+            "client_email": service_account_info["client_email"],
+            "client_id": service_account_info.get("client_id", ""),
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_x509_cert_url": service_account_info.get("client_x509_cert_url", "")
+        }
+        
+        # Try to create credentials
         credentials = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
+            credentials_dict,
             scopes=SCOPES
         )
         
+        # Create services
         drive_service = build('drive', 'v3', credentials=credentials)
         sheets_client = gspread.authorize(credentials)
         
+        st.success("Successfully created Google services!")
         return drive_service, sheets_client
         
     except Exception as e:
-        st.error(f"Error setting up Google services: {str(e)}")
-        st.error(f"Error type: {type(e)}")
+        st.error("Failed to initialize Google services")
+        st.error(f"Error Type: {type(e)}")
+        st.error(f"Error Message: {str(e)}")
+        
+        # If it's a credentials error, print more details
+        if hasattr(e, 'args') and e.args:
+            st.error("Detailed error information:")
+            for arg in e.args:
+                st.error(str(arg))
+        
         return None, None
 
 def upload_to_drive(service, file_data, filename, mimetype, folder_id):
